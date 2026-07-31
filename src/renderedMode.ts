@@ -261,6 +261,13 @@ class IndentProcessor {
 		if (isPdfExport && element.classList.contains("__title__")) {
 			return true;
 		}
+
+		// Skip elements inside callouts so it doesn't get indented twice
+		const closestCallout = element.closest(".callout-content");
+      		if (closestCallout && !element.isSameNode(closestCallout)) {
+         	 return true;
+      	}
+
 		return false;
 	}
 
