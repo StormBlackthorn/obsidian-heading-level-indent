@@ -1,6 +1,6 @@
 import type { App } from "obsidian";
-import { HeadingIndentSettings } from "./settings";
 import { getFrontmatterListener } from "./FrontmatterListener";
+import { HeadingIndentSettings } from "./settings";
 
 /**
  * Handles indentation for rendered views (reading view and PDF export).
@@ -194,11 +194,15 @@ class IndentProcessor {
 
 	process(): void {
 		const selectors = this.getContentSelectors();
-		const elements = this.rootElement.querySelectorAll(
-			selectors.map((tag) => `div > ${tag}`).join(", ")
-		);
+		const embeddedElements = Array.from(
+				this.rootElement.querySelectorAll('div > p > span.internal-embed.markdown-embed')
+			).map(container => Array.from(container.querySelectorAll(selectors.join(","))));
+		const embeddedSet = new Set(embeddedElements.reduce((a, b) => a.concat(b), []));
+		const elements = Array.from(
+				this.rootElement.querySelectorAll(selectors.map(tag => `div > ${tag}`).join(","))
+			).filter(e => !embeddedSet.has(e));
 
-		for (const element of Array.from(elements)) {
+		for (const element of elements) {
 			if (this.shouldSkipElement(element)) {
 				continue;
 			}
@@ -211,6 +215,26 @@ class IndentProcessor {
 				this.processContent(element as HTMLElement);
 			}
 		}
+		embeddedElements.forEach(embed => {
+			this.currentHeadingLevel = 0; 
+			this.lastHeadingElement = null;
+			for(const element of embed) {
+
+				if (this.shouldSkipElement(element)) {
+					continue;
+				}
+
+				const tagName = element.tagName.toLowerCase();
+
+				if (this.isHeading(tagName)) {
+					this.processHeading(element as HTMLElement, tagName);
+				} else if (this.currentHeadingLevel > 0) {
+					this.processContent(element as HTMLElement);
+				}
+			}
+		});
+
+			
 	}
 
 	/**
