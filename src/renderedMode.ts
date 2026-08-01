@@ -194,13 +194,23 @@ class IndentProcessor {
 
 	process(): void {
 		const selectors = this.getContentSelectors();
+
 		const embeddedElements = Array.from(
 				this.rootElement.querySelectorAll('div > p > span.internal-embed.markdown-embed')
 			).map(container => Array.from(container.querySelectorAll(selectors.join(","))));
 		const embeddedSet = new Set(embeddedElements.reduce((a, b) => a.concat(b), []));
+
+		const calloutElements = Array.from(
+			this.rootElement.querySelectorAll('div.callout > div.callout-content')
+		).map(container => 
+			Array.from(container.querySelectorAll(selectors.filter(s => s !== "div.callout").join(",")))
+				.filter(el => el.closest("div.callout-content") === container)
+		);
+		const calloutSet = new Set(calloutElements.reduce((a, b) => a.concat(b), []));
+
 		const elements = Array.from(
-				this.rootElement.querySelectorAll(selectors.map(tag => `div > ${tag}`).join(","))
-			).filter(e => !embeddedSet.has(e));
+				this.rootElement.querySelectorAll(selectors.join(","))
+			).filter(e => !embeddedSet.has(e) && !calloutSet.has(e));
 
 		for (const element of elements) {
 			if (this.shouldSkipElement(element)) {
@@ -208,13 +218,14 @@ class IndentProcessor {
 			}
 
 			const tagName = element.tagName.toLowerCase();
-
+			
 			if (this.isHeading(tagName)) {
 				this.processHeading(element as HTMLElement, tagName);
 			} else if (this.currentHeadingLevel > 0) {
 				this.processContent(element as HTMLElement);
-			}
+			} 
 		}
+
 		embeddedElements.forEach(embed => {
 			this.currentHeadingLevel = 0; 
 			this.lastHeadingElement = null;
@@ -231,6 +242,26 @@ class IndentProcessor {
 				} else if (this.currentHeadingLevel > 0) {
 					this.processContent(element as HTMLElement);
 				}
+			}
+		});
+
+		calloutElements.forEach(callout => {
+			this.currentHeadingLevel = 0; 
+			this.lastHeadingElement = null;
+
+			for(const element of callout) {
+				if (this.shouldSkipElement(element)) {
+					continue;
+				}
+
+				const tagName = element.tagName.toLowerCase();
+
+				if (this.isHeading(tagName)) {
+					this.processHeading(element as HTMLElement, tagName);
+				} else if (this.currentHeadingLevel > 0) {
+					this.processContent(element as HTMLElement);
+				}
+
 			}
 		});
 
@@ -286,11 +317,7 @@ class IndentProcessor {
 			return true;
 		}
 
-		// Skip elements inside callouts so it doesn't get indented twice
-		const closestCallout = element.closest(".callout-content");
-      		if (closestCallout && !element.isSameNode(closestCallout)) {
-         	 return true;
-      	}
+		if(element.classList.contains("callout-content")) return true;
 
 		return false;
 	}
@@ -307,15 +334,26 @@ class IndentProcessor {
 		const parentDiv = element.parentElement;
 		if (parentDiv?.tagName === "DIV") {
 			const indent = this.getIndentForLevel(level - 1);
-			parentDiv.style.paddingLeft = `${indent}px`;
-			parentDiv.classList.add(`heading_h${level}`);
+
+			if(parentDiv.classList.contains("callout-content")) {
+				element.style.paddingLeft = `${indent}px`;
+				element.classList.add(`heading_h${level}`);
+			} else {
+				parentDiv.style.paddingLeft = `${indent}px`;
+				parentDiv.classList.add(`heading_h${level}`);
+			}
 		}
 	}
 
 	private processContent(element: HTMLElement): void {
+
 		const parentDiv = element.parentElement;
-		if (parentDiv?.tagName === "DIV" && parentDiv !== this.lastHeadingElement?.parentElement) {
-			const indent = this.getIndentForLevel(this.currentHeadingLevel);
+		const indent = this.getIndentForLevel(this.currentHeadingLevel);
+
+		if(parentDiv?.classList.contains("callout-content")) {
+			element.style.marginLeft = `${indent}px`; //margin instead of padding so nested callouts gets indented
+			element.classList.add(`data_h${this.currentHeadingLevel}`);
+		} else if (parentDiv?.tagName === "DIV" && parentDiv !== this.lastHeadingElement?.parentElement) {
 			parentDiv.style.paddingLeft = `${indent}px`;
 			parentDiv.classList.add(`data_h${this.currentHeadingLevel}`);
 		}
