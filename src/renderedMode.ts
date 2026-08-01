@@ -192,26 +192,7 @@ class IndentProcessor {
 		private rootElement: HTMLElement
 	) {}
 
-	process(): void {
-		const selectors = this.getContentSelectors();
-
-		const embeddedElements = Array.from(
-				this.rootElement.querySelectorAll('div > p > span.internal-embed.markdown-embed')
-			).map(container => Array.from(container.querySelectorAll(selectors.join(","))));
-		const embeddedSet = new Set(embeddedElements.reduce((a, b) => a.concat(b), []));
-
-		const calloutElements = Array.from(
-			this.rootElement.querySelectorAll('div.callout > div.callout-content')
-		).map(container => 
-			Array.from(container.querySelectorAll(selectors.filter(s => s !== "div.callout").join(",")))
-				.filter(el => el.closest("div.callout-content") === container)
-		);
-		const calloutSet = new Set(calloutElements.reduce((a, b) => a.concat(b), []));
-
-		const elements = Array.from(
-				this.rootElement.querySelectorAll(selectors.join(","))
-			).filter(e => !embeddedSet.has(e) && !calloutSet.has(e));
-
+	loopThroughElements(elements: Element[]): void {
 		for (const element of elements) {
 			if (this.shouldSkipElement(element)) {
 				continue;
@@ -225,44 +206,44 @@ class IndentProcessor {
 				this.processContent(element as HTMLElement);
 			} 
 		}
+	}
+
+	process(): void {
+		const selectors = this.getContentSelectors();
+
+		const embeddedElements = Array.from(
+				this.rootElement.querySelectorAll('div > p > span.internal-embed.markdown-embed')
+			).map(container => Array.from(container.querySelectorAll(selectors.join(","))));
+		const embeddedSet = new Set(embeddedElements.reduce((a, b) => a.concat(b), []));
+
+		const calloutElements = Array.from(
+			this.rootElement.querySelectorAll('div.callout > div.callout-content')
+		).map(container => 
+			Array.from(container.querySelectorAll(selectors.join(",")))
+				.filter(e => e.closest("div.callout-content") === container)
+		)
+		const calloutSet = new Set(calloutElements.reduce((a, b) => a.concat(b), []));
+
+		const elements = Array.from(
+			this.rootElement.querySelectorAll(selectors.join(","))
+		).filter(e => 
+			!embeddedSet.has(e) && 
+			!calloutSet.has(e) && 
+			!e.parentElement?.closest("div.callout") //no nested callouts => breaks nested callout indent
+		);
+		
+		this.loopThroughElements(elements);
 
 		embeddedElements.forEach(embed => {
 			this.currentHeadingLevel = 0; 
 			this.lastHeadingElement = null;
-			for(const element of embed) {
-
-				if (this.shouldSkipElement(element)) {
-					continue;
-				}
-
-				const tagName = element.tagName.toLowerCase();
-
-				if (this.isHeading(tagName)) {
-					this.processHeading(element as HTMLElement, tagName);
-				} else if (this.currentHeadingLevel > 0) {
-					this.processContent(element as HTMLElement);
-				}
-			}
+			this.loopThroughElements(embed);
 		});
 
 		calloutElements.forEach(callout => {
 			this.currentHeadingLevel = 0; 
 			this.lastHeadingElement = null;
-
-			for(const element of callout) {
-				if (this.shouldSkipElement(element)) {
-					continue;
-				}
-
-				const tagName = element.tagName.toLowerCase();
-
-				if (this.isHeading(tagName)) {
-					this.processHeading(element as HTMLElement, tagName);
-				} else if (this.currentHeadingLevel > 0) {
-					this.processContent(element as HTMLElement);
-				}
-
-			}
+			this.loopThroughElements(callout);
 		});
 
 			
@@ -336,7 +317,9 @@ class IndentProcessor {
 			const indent = this.getIndentForLevel(level - 1);
 
 			if(parentDiv.classList.contains("callout-content")) {
-				element.style.paddingLeft = `${indent}px`;
+				// margin instead of padding because this works directly on the H elements as theres no wrapper div
+				// Some theme with heading underline will break if we use padding
+				element.style.setProperty("margin-left", `${indent}px`, "important"); 
 				element.classList.add(`heading_h${level}`);
 			} else {
 				parentDiv.style.paddingLeft = `${indent}px`;
@@ -351,7 +334,7 @@ class IndentProcessor {
 		const indent = this.getIndentForLevel(this.currentHeadingLevel);
 
 		if(parentDiv?.classList.contains("callout-content")) {
-			element.style.marginLeft = `${indent}px`; //margin instead of padding so nested callouts gets indented
+				element.style.setProperty("margin-left", `${indent}px`, "important"); 
 			element.classList.add(`data_h${this.currentHeadingLevel}`);
 		} else if (parentDiv?.tagName === "DIV" && parentDiv !== this.lastHeadingElement?.parentElement) {
 			parentDiv.style.paddingLeft = `${indent}px`;
