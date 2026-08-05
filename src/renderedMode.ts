@@ -193,6 +193,8 @@ class IndentProcessor {
 	) {}
 
 	loopThroughElements(elements: Element[]): void {
+		this.currentHeadingLevel = 0;
+		this.lastHeadingElement = null;
 		for (const element of elements) {
 			if (this.shouldSkipElement(element)) {
 				continue;
@@ -233,18 +235,8 @@ class IndentProcessor {
 		);
 		
 		this.loopThroughElements(elements);
-
-		embeddedElements.forEach(embed => {
-			this.currentHeadingLevel = 0; 
-			this.lastHeadingElement = null;
-			this.loopThroughElements(embed);
-		});
-
-		calloutElements.forEach(callout => {
-			this.currentHeadingLevel = 0; 
-			this.lastHeadingElement = null;
-			this.loopThroughElements(callout);
-		});
+		embeddedElements.forEach(embed   => this.loopThroughElements(embed));
+		calloutElements .forEach(callout => this.loopThroughElements(callout));
 
 			
 	}
@@ -298,7 +290,7 @@ class IndentProcessor {
 			return true;
 		}
 
-		if(element.classList.contains("callout-content")) return true;
+		if(element.classList.contains("callout-content") || element.parentElement?.classList.contains("callout-title-inner")) return true;
 
 		return false;
 	}
